@@ -55,7 +55,9 @@ button:hover{background:#4338ca}
 <script>
 const SUPABASE_URL = "https://qomncbeywccnxzgkbhmc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_rf_iZgd54OQ8_klQlCAvRg_xD-3NgZG";
-const SITE_URL = "https://hunganhn366-creator.github.io/PalTalk-AI/";
+
+// Automatically detect your current site URL (handles local testing and GitHub Pages dynamically without mismatch loops!)
+const SITE_URL = window.location.origin + window.location.pathname;
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -88,14 +90,6 @@ function updateUI(user) {
 
 async function initApp() {
   try {
-    // Check if session tokens are returned in the hash fragment from Google OAuth redirect
-    if (window.location.hash && window.location.hash.includes('access_token')) {
-      const { data, error } = await db.auth.getSessionFromUrl({ storeSession: true });
-      if (!error && data.session) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    }
-
     const { data: { session } } = await db.auth.getSession();
     if (session) {
       updateUI(session.user);
@@ -106,7 +100,6 @@ async function initApp() {
   }
 }
 
-// Global auth state listener to update UI and chat state instantly
 db.auth.onAuthStateChange((event, session) => {
   const user = session ? session.user : null;
   updateUI(user);
