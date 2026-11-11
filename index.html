@@ -86,18 +86,30 @@ function updateUI(user) {
   }
 }
 
-// Safely initialize session and handle OAuth hash redirect
 async function initApp() {
   try {
-    // Clean URL hash if returning from Supabase OAuth redirect
-    if (window.location.hash && window.location.hash.includes('access_token')) {
-      window.history.replaceState({}, document.title, window.location.pathname);
+    // Let Supabase handle parsing the OAuth tokens from the URL hash properly
+    const { data: { session }, error } = await db.auth.getSession();
+    
+    if (error) {
+      console.error("Session error:", error);
     }
 
-    const { data: { session } } = await db.auth.getSession();
     if (session) {
       updateUI(session.user);
       loadChatHistory();
+    } else {
+      // Fallback check if hash contains tokens and getSession missed it
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        // Give a short moment for client to process, then re-check
+        setTimeout(async () => {
+          const { data: retryData } = await db.auth.getSession();
+          if (retryData && retryData.session) {
+            updateUI(retryData.session.user);
+            loadChatHistory();
+          }
+        }, 500);
+      }
     }
   } catch (err) {
     console.error("Init error:", err);
