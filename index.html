@@ -57,13 +57,17 @@ const SUPABASE_URL = "https://qomncbeywccnxzgkbhmc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_rf_iZgd54OQ8_klQlCAvRg_xD-3NgZG";
 const SITE_URL = "https://hunganhn366-creator.github.io/PalTalk-AI/";
 
-// Initialize Supabase client safely
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 const $ = id => document.getElementById(id);
 let currentUser = null;
 
-// Safe UI update function
 function updateUI(user) {
   currentUser = user;
   if (user) {
@@ -82,19 +86,31 @@ function updateUI(user) {
   }
 }
 
-// Handle auth state changes and startup session
+// Safely initialize session and handle OAuth hash redirect
+async function initApp() {
+  try {
+    // If returning from Google OAuth, parse the session from the URL hash
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      const { data, error } = await db.auth.getSessionFromUrl({ storeSession: true });
+      if (!error && data.session) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+
+    const { data: { session } } = await db.auth.getSession();
+    if (session) {
+      updateUI(session.user);
+      loadChatHistory();
+    }
+  } catch (err) {
+    console.error("Init error:", err);
+  }
+}
+
 db.auth.onAuthStateChange((event, session) => {
   const user = session ? session.user : null;
   updateUI(user);
   if (user) {
-    loadChatHistory();
-  }
-});
-
-// Load existing session on page load
-db.auth.getSession().then(({ data: { session } }) => {
-  if (session) {
-    updateUI(session.user);
     loadChatHistory();
   }
 });
@@ -114,15 +130,19 @@ $("signOutBtn").addEventListener("click", async () => {
 
 async function loadChatHistory() {
   if (!currentUser) return;
-  const { data, error } = await db
-    .from("chat_history")
-    .select("*")
-    .eq("user_id", currentUser.id)
-    .order("created_at", { ascending: true });
+  try {
+    const { data, error } = await db
+      .from("chat_history")
+      .select("*")
+      .eq("user_id", currentUser.id)
+      .order("created_at", { ascending: true });
 
-  if (!error && data && data.length > 0) {
-    $("chatBox").innerHTML = "";
-    data.forEach(msg => appendMessage(msg.content, msg.role));
+    if (!error && data && data.length > 0) {
+      $("chatBox").innerHTML = "";
+      data.forEach(msg => appendMessage(msg.content, msg.role));
+    }
+  } catch (err) {
+    console.error("Load history error:", err);
   }
 }
 
@@ -139,7 +159,6 @@ $("chatForm").addEventListener("submit", async (e) => {
   appendMessage(text, "user");
   $("userInput").value = "";
 
-  // Save user message to database (fails gracefully if table rules differ)
   try {
     await db.from("chat_history").insert({
       user_id: currentUser.id,
@@ -147,7 +166,7 @@ $("chatForm").addEventListener("submit", async (e) => {
       content: text
     });
   } catch (err) {
-    console.error("DB insert error:", err);
+    console.error("Insert error:", err);
   }
 
   setTimeout(async () => {
@@ -171,7 +190,7 @@ $("chatForm").addEventListener("submit", async (e) => {
         content: reply
       });
     } catch (err) {
-      console.error("DB insert error:", err);
+      console.error("Insert error:", err);
     }
   }, 700);
 });
@@ -183,6 +202,9 @@ function appendMessage(text, sender) {
   $("chatBox").appendChild(div);
   $("chatBox").scrollTop = $("chatBox").scrollHeight;
 }
+
+// Run app startup safely
+initApp();
 </script>
 </body>
 </html>
