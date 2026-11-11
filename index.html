@@ -57,48 +57,23 @@ const SUPABASE_URL = "https://qomncbeywccnxzgkbhmc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_rf_iZgd54OQ8_klQlCAvRg_xD-3NgZG";
 const SITE_URL = "https://hunganhn366-creator.github.io/PalTalk-AI/";
 
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  }
-});
+// Initialize Supabase client safely
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = id => document.getElementById(id);
 let currentUser = null;
 
-async function initSession() {
-  // Check if OAuth tokens arrived in the URL hash and parse them immediately
-  if (window.location.hash && window.location.hash.includes('access_token')) {
-    const { data, error } = await db.auth.getSessionFromUrl({ storeSession: true });
-    if (!error && data.session) {
-      currentUser = data.session.user;
-      // Clear the messy token hash from the URL bar without reloading
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }
-
-  const { data: { session } } = await db.auth.getSession();
-  currentUser = session ? session.user : null;
-  updateUI();
-  if (currentUser) {
-    loadChatHistory();
-  }
-}
-
-function updateUI() {
-  if (currentUser) {
+// Safe UI update function
+function updateUI(user) {
+  currentUser = user;
+  if (user) {
     $("signInBtn").classList.add("hidden");
     $("signOutBtn").classList.remove("hidden");
     $("userAvatar").classList.remove("hidden");
     
-    const meta = currentUser.user_metadata || {};
-    const name = meta.full_name || meta.name || currentUser.email;
-    const avatar = meta.avatar_url || "https://www.gravatar.com/avatar/?d=mp";
-    
-    $("userName").textContent = name;
-    $("userAvatar").src = avatar;
+    const meta = user.user_metadata || {};
+    $("userName").textContent = meta.full_name || meta.name || user.email;
+    $("userAvatar").src = meta.avatar_url || "https://www.gravatar.com/avatar/?d=mp";
   } else {
     $("signInBtn").classList.remove("hidden");
     $("signOutBtn").classList.add("hidden");
@@ -106,6 +81,23 @@ function updateUI() {
     $("userName").textContent = "Not signed in";
   }
 }
+
+// Handle auth state changes and startup session
+db.auth.onAuthStateChange((event, session) => {
+  const user = session ? session.user : null;
+  updateUI(user);
+  if (user) {
+    loadChatHistory();
+  }
+});
+
+// Load existing session on page load
+db.auth.getSession().then(({ data: { session } }) => {
+  if (session) {
+    updateUI(session.user);
+    loadChatHistory();
+  }
+});
 
 $("signInBtn").addEventListener("click", async () => {
   await db.auth.signInWithOAuth({
@@ -116,12 +108,12 @@ $("signInBtn").addEventListener("click", async () => {
 
 $("signOutBtn").addEventListener("click", async () => {
   await db.auth.signOut();
-  currentUser = null;
-  updateUI();
+  updateUI(null);
   $("chatBox").innerHTML = '<div class="message assistant">Hello! I am your AI English Mentor. Sign in to save your conversation history!</div>';
 });
 
 async function loadChatHistory() {
+  if (!currentUser) return;
   const { data, error } = await db
     .from("chat_history")
     .select("*")
@@ -147,11 +139,16 @@ $("chatForm").addEventListener("submit", async (e) => {
   appendMessage(text, "user");
   $("userInput").value = "";
 
-  await db.from("chat_history").insert({
-    user_id: currentUser.id,
-    role: "user",
-    content: text
-  });
+  // Save user message to database (fails gracefully if table rules differ)
+  try {
+    await db.from("chat_history").insert({
+      user_id: currentUser.id,
+      role: "user",
+      content: text
+    });
+  } catch (err) {
+    console.error("DB insert error:", err);
+  }
 
   setTimeout(async () => {
     let reply = "That's a good attempt! To sound more natural, try focusing on your verb tenses and article usage here.";
@@ -167,11 +164,15 @@ $("chatForm").addEventListener("submit", async (e) => {
 
     appendMessage(reply, "assistant");
 
-    await db.from("chat_history").insert({
-      user_id: currentUser.id,
-      role: "assistant",
-      content: reply
-    });
+    try {
+      await db.from("chat_history").insert({
+        user_id: currentUser.id,
+        role: "assistant",
+        content: reply
+      });
+    } catch (err) {
+      console.error("DB insert error:", err);
+    }
   }, 700);
 });
 
@@ -182,16 +183,6 @@ function appendMessage(text, sender) {
   $("chatBox").appendChild(div);
   $("chatBox").scrollTop = $("chatBox").scrollHeight;
 }
-
-db.auth.onAuthStateChange((_event, session) => {
-  currentUser = session ? session.user : null;
-  updateUI();
-  if (currentUser) {
-    loadChatHistory();
-  }
-});
-
-initSession();
 </script>
 </body>
 </html>
