@@ -43,11 +43,11 @@ button:hover{background:#4338ca}
 
 <main>
   <div class="chat-container" id="chatBox">
-    <div class="message assistant">Hello! I am your AI English Mentor. Paste your English homework or ask any grammar questions here, and I'll help you solve it!</div>
+    <div class="message assistant">Hello! I am your AI English Mentor. Sign in with Google, then type your English homework or questions here for instant help!</div>
   </div>
   
   <form class="input-area" id="chatForm">
-    <input type="text" id="userInput" placeholder="Paste English homework or ask a question..." autocomplete="off">
+    <input type="text" id="userInput" placeholder="Ask a question or practice English..." autocomplete="off">
     <button type="submit">Send</button>
   </form>
 </main>
@@ -88,6 +88,7 @@ function updateUI(user) {
 
 async function initApp() {
   try {
+    // Clear URL hash fragment if present after Google callback redirect
     if (window.location.hash && window.location.hash.includes('access_token')) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -102,6 +103,7 @@ async function initApp() {
   }
 }
 
+// React instantly to auth changes (sign in or sign out)
 db.auth.onAuthStateChange((event, session) => {
   const user = session ? session.user : null;
   updateUI(user);
@@ -120,7 +122,7 @@ $("signInBtn").addEventListener("click", async () => {
 $("signOutBtn").addEventListener("click", async () => {
   await db.auth.signOut();
   updateUI(null);
-  $("chatBox").innerHTML = '<div class="message assistant">Hello! I am your AI English Mentor. Sign in with Google to save your homework history!</div>';
+  $("chatBox").innerHTML = '<div class="message assistant">Hello! I am your AI English Mentor. Sign in with Google to use the chatbot!</div>';
 });
 
 async function loadChatHistory() {
@@ -147,7 +149,7 @@ $("chatForm").addEventListener("submit", async (e) => {
   if (!text) return;
 
   if (!currentUser) {
-    alert("Please sign in with Google first so you can use the AI chatbot for your homework!");
+    alert("Please sign in with Google first to chat with your AI mentor!");
     return;
   }
 
@@ -165,15 +167,15 @@ $("chatForm").addEventListener("submit", async (e) => {
   }
 
   setTimeout(async () => {
-    let reply = "Here is the solution for your homework: Let's break down this sentence structure and correct any grammatical errors step by step.";
+    let reply = "Here is the breakdown for your English assignment: Let's look at the grammar and wording step-by-step to make it sound natural.";
     const lower = text.toLowerCase();
     
     if (lower.includes("hello") || lower.includes("hi")) {
-      reply = "Hey there! Paste your English homework questions or sentences here, and I'll help you solve them!";
+      reply = "Hi there! What English homework or sentences would you like to solve today?";
     } else if (lower.includes("homework") || lower.includes("exercise") || lower.includes("question")) {
-      reply = "Got it! Send over the exact prompt or sentences from your assignment, and I will give you the corrected answers with explanations.";
+      reply = "Send over your exercise text, and I'll give you the exact answers and explanations.";
     } else if (lower.includes("grammar")) {
-      reply = "Let's check the grammar rule on this one. Here is the corrected version and why it works...";
+      reply = "Grammar rules for this type of sentence typically involve checking your verb tenses and clause structures. Here is how to fix it...";
     }
 
     appendMessage(reply, "assistant");
