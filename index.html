@@ -89,7 +89,7 @@ function updateUI(user) {
 
 async function initApp() {
   try {
-    // Handle OAuth hash tokens returned by Google redirect
+    // Bắt token trực tiếp từ url hash nếu có
     if (window.location.hash && window.location.hash.includes('access_token')) {
       const hashParams = new URLSearchParams(window.location.hash.substring(1));
       const accessToken = hashParams.get('access_token');
