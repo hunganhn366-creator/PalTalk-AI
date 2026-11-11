@@ -55,7 +55,7 @@ button:hover{background:#4338ca}
 <script>
 const SUPABASE_URL = "https://qomncbeywccnxzgkbhmc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_rf_iZgd54OQ8_klQlCAvRg_xD-3NgZG";
-const SITE_URL = "https://hunganhn366-creator.github.io/PalTalk-AI/";
+const SITE_URL = window.location.origin + window.location.pathname;
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
@@ -67,6 +67,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 const $ = id => document.getElementById(id);
 let currentUser = null;
+const fallbackAvatar = "https://www.gravatar.com/avatar/?d=mp";
 
 function updateUI(user) {
   currentUser = user;
@@ -77,7 +78,7 @@ function updateUI(user) {
     
     const meta = user.user_metadata || {};
     $("userName").textContent = meta.full_name || meta.name || user.email;
-    $("userAvatar").src = meta.avatar_url || "https://www.gravatar.com/avatar/?d=mp";
+    $("userAvatar").src = meta.avatar_url || fallbackAvatar;
   } else {
     $("signInBtn").classList.remove("hidden");
     $("signOutBtn").classList.add("hidden");
@@ -88,22 +89,9 @@ function updateUI(user) {
 
 async function initApp() {
   try {
-    // Explicitly parse the access token hash when Google redirects back
-    if (window.location.hash && window.location.hash.includes('access_token')) {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
-      
-      if (accessToken) {
-        await db.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken
-        });
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    }
+    const { data: { session }, error } = await db.auth.getSession();
+    if (error) throw error;
 
-    const { data: { session } } = await db.auth.getSession();
     if (session) {
       updateUI(session.user);
       loadChatHistory();
@@ -113,6 +101,7 @@ async function initApp() {
   }
 }
 
+// Track session changes smoothly just like CloudGallery
 db.auth.onAuthStateChange((event, session) => {
   const user = session ? session.user : null;
   updateUI(user);
@@ -122,10 +111,11 @@ db.auth.onAuthStateChange((event, session) => {
 });
 
 $("signInBtn").addEventListener("click", async () => {
-  await db.auth.signInWithOAuth({
+  const { error } = await db.auth.signInWithOAuth({
     provider: "google",
     options: { redirectTo: SITE_URL }
   });
+  if (error) alert("Sign in error: " + error.message);
 });
 
 $("signOutBtn").addEventListener("click", async () => {
@@ -165,6 +155,7 @@ $("chatForm").addEventListener("submit", async (e) => {
   appendMessage(text, "user");
   $("userInput").value = "";
 
+  // Save user message to Supabase chat_history table
   try {
     await db.from("chat_history").insert({
       user_id: currentUser.id,
@@ -189,6 +180,7 @@ $("chatForm").addEventListener("submit", async (e) => {
 
     appendMessage(reply, "assistant");
 
+    // Save assistant reply to Supabase chat_history table
     try {
       await db.from("chat_history").insert({
         user_id: currentUser.id,
