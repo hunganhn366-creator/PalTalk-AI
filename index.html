@@ -86,36 +86,28 @@ function updateUI(user) {
   }
 }
 
+// Initialize session and clean URL after Google OAuth callback redirect
 async function initApp() {
   try {
-    // Let Supabase handle parsing the OAuth tokens from the URL hash properly
-    const { data: { session }, error } = await db.auth.getSession();
-    
-    if (error) {
-      console.error("Session error:", error);
+    // Check if redirected back from Google with tokens in hash
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      // Clean up the URL hash so it looks nice after login
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
+
+    const { data: { session }, error } = await db.auth.getSession();
+    if (error) throw error;
 
     if (session) {
       updateUI(session.user);
       loadChatHistory();
-    } else {
-      // Fallback check if hash contains tokens and getSession missed it
-      if (window.location.hash && window.location.hash.includes('access_token')) {
-        // Give a short moment for client to process, then re-check
-        setTimeout(async () => {
-          const { data: retryData } = await db.auth.getSession();
-          if (retryData && retryData.session) {
-            updateUI(retryData.session.user);
-            loadChatHistory();
-          }
-        }, 500);
-      }
     }
   } catch (err) {
     console.error("Init error:", err);
   }
 }
 
+// Listen for login/logout state changes dynamically
 db.auth.onAuthStateChange((event, session) => {
   const user = session ? session.user : null;
   updateUI(user);
@@ -125,10 +117,15 @@ db.auth.onAuthStateChange((event, session) => {
 });
 
 $("signInBtn").addEventListener("click", async () => {
-  await db.auth.signInWithOAuth({
+  const { error } = await db.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: SITE_URL }
+    options: { 
+      redirectTo: SITE_URL 
+    }
   });
+  if (error) {
+    alert("Sign in error: " + error.message);
+  }
 });
 
 $("signOutBtn").addEventListener("click", async () => {
