@@ -3,7 +3,6 @@ const SUPABASE_URL = "https://qomncbeywccnxzgkbhmc.supabase.co";
 const SUPABASE_KEY = "sb_publishable_rf_iZgd54OQ8_klQlCAvRg_xD-3NgZG";
 const SITE_URL = "https://hunganhn366-creator.github.io/PalTalk-AI/";
 
-// Initialize Supabase with explicit session persistence options for static hosting
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession: true,
@@ -16,9 +15,16 @@ const $ = id => document.getElementById(id);
 let currentUser = null;
 
 async function initSession() {
-  const { data: { session }, error } = await db.auth.getSession();
-  if (error) console.error("Session error:", error.message);
-  
+  // Explicitly check for OAuth tokens in the URL hash and store the session
+  if (window.location.hash && window.location.hash.includes('access_token')) {
+    const { data, error } = await db.auth.getSessionFromUrl({ storeSession: true });
+    if (!error && data.session) {
+      currentUser = data.session.user;
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
+
+  const { data: { session } } = await db.auth.getSession();
   currentUser = session ? session.user : null;
   updateUI();
   if (currentUser) {
@@ -47,11 +53,16 @@ function updateUI() {
 }
 
 $("signInBtn").addEventListener("click", async () => {
-  const { error } = await db.auth.signInWithOAuth({
+  await db.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: SITE_URL }
+    options: { 
+      redirectTo: SITE_URL,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'consent',
+      }
+    }
   });
-  if (error) alert("Sign in error: " + error.message);
 });
 
 $("signOutBtn").addEventListener("click", async () => {
@@ -123,7 +134,7 @@ function appendMessage(text, sender) {
   $("chatBox").scrollTop = $("chatBox").scrollHeight;
 }
 
-db.auth.onAuthStateChange((event, session) => {
+db.auth.onAuthStateChange((_event, session) => {
   currentUser = session ? session.user : null;
   updateUI();
   if (currentUser) {
