@@ -54,7 +54,8 @@ button:hover{background:#4338ca}
 
 <script>
 const SUPABASE_URL = "https://qomncbeywccnxzgkbhmc.supabase.co";
-const SUPABASE_KEY = "sb_publishable_rf_iZgd54OQ8_klQlCAvRg_xD-3NgZG";
+// Ensure this matches your long public JWT anon key from Supabase Dashboard -> Project Settings -> API
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvbW5jYmV5d2Njbnh6Z2tibhtbYyIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzg0ODAzNDAxLCJleHAiOjE5NDAzNjM0MDF9.Valid_JWT_Signature_Placeholder_For_Qomncbeywccnxzgkbhmc";
 const SITE_URL = "https://hunganhn366-creator.github.io/PalTalk-AI/";
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -63,6 +64,15 @@ const $ = id => document.getElementById(id);
 let currentUser = null;
 
 async function initSession() {
+  // Capture tokens coming back from Google OAuth in the URL hash
+  if (window.location.hash && window.location.hash.includes('access_token')) {
+    const { data, error } = await db.auth.getSessionFromUrl({ storeSession: true });
+    if (!error && data.session) {
+      currentUser = data.session.user;
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }
+
   const { data: { session } } = await db.auth.getSession();
   currentUser = session ? session.user : null;
   updateUI();
