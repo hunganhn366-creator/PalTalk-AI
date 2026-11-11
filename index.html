@@ -88,9 +88,12 @@ function updateUI(user) {
 
 async function initApp() {
   try {
-    // Clear URL hash fragment if present after Google callback redirect
+    // Check if session tokens are returned in the hash fragment from Google OAuth redirect
     if (window.location.hash && window.location.hash.includes('access_token')) {
-      window.history.replaceState({}, document.title, window.location.pathname);
+      const { data, error } = await db.auth.getSessionFromUrl({ storeSession: true });
+      if (!error && data.session) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
     }
 
     const { data: { session } } = await db.auth.getSession();
@@ -103,7 +106,7 @@ async function initApp() {
   }
 }
 
-// React instantly to auth changes (sign in or sign out)
+// Global auth state listener to update UI and chat state instantly
 db.auth.onAuthStateChange((event, session) => {
   const user = session ? session.user : null;
   updateUI(user);
