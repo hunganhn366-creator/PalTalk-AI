@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -92,46 +92,39 @@ function updateUI(user) {
   }
 }
 
-async function initApp() {
-  try {
-    if (window.location.hash && window.location.hash.includes('access_token')) {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
-      
-      if (accessToken) {
-        await db.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken
-        });
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    }
-
-    const { data: { session }, error } = await db.auth.getSession();
-    if (error) throw error;
-
-    if (session) {
-      updateUI(session.user);
-      loadChatHistory();
-    }
-  } catch (err) {
-    console.error("Init error:", err);
+// Hiện lỗi đăng nhập (nếu Supabase/Google trả về lỗi trên URL) thay vì im lặng
+function showAuthErrorFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.substring(1));
+  const err = params.get("error_description") || hash.get("error_description")
+           || params.get("error") || hash.get("error");
+  if (err) {
+    const msg = "Sign-in failed: " + decodeURIComponent(err.replace(/\+/g, " "));
+    console.error(msg);
+    appendMessage("⚠️ " + msg, "assistant");
+    window.history.replaceState({}, document.title, window.location.pathname);
   }
 }
 
+// Chỉ dùng MỘT nguồn sự thật: onAuthStateChange.
+// detectSessionInUrl: true đã tự đọc token trên URL, không cần tự parse hash + setSession nữa.
+// Sự kiện INITIAL_SESSION sẽ bắn ra sau khi client đọc xong URL/localStorage.
 db.auth.onAuthStateChange((event, session) => {
+  console.log("[auth]", event, session ? session.user.email : null);
   const user = session ? session.user : null;
+  const changedUser = (user && user.id) !== (currentUser && currentUser.id);
   updateUI(user);
-  if (user) {
-    loadChatHistory();
-  }
+  // Không gọi Supabase trực tiếp trong callback (có thể bị kẹt lock) -> đẩy ra sau
+  if (user && changedUser) setTimeout(loadChatHistory, 0);
 });
+
+showAuthErrorFromUrl();
 
 $("signInBtn").addEventListener("click", async () => {
   const { error } = await db.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: SITE_URL }
+    // Quay về đúng trang đang mở (GitHub Pages hoặc localhost khi test)
+    options: { redirectTo: window.location.origin + window.location.pathname }
   });
   if (error) alert("Sign in error: " + error.message);
 });
@@ -197,7 +190,7 @@ $("chatForm").addEventListener("submit", async (e) => {
   }
 
   setTimeout(async () => {
-    let reply = `💡 **Grammar Feedback:** Your sentence is clear! To make it sound more native, you could phrase it: *"${text.replace(/\b(is|are|was)\b/gi, '')}..."* Let me know if you want to practice more variations!`;
+    let reply = 💡 **Grammar Feedback:** Your sentence is clear! To make it sound more native, you could phrase it: *"${text.replace(/\b(is|are|was)\b/gi, '')}..."* Let me know if you want to practice more variations!;
     const lower = text.toLowerCase();
     
     if (lower.includes("hello") || lower.includes("hi")) {
@@ -228,7 +221,6 @@ function appendMessage(text, sender) {
   $("chatBox").scrollTop = $("chatBox").scrollHeight;
 }
 
-initApp();
 </script>
 </body>
 </html>
